@@ -34,10 +34,13 @@ import (
 )
 
 const (
-	hcloudTokenENVVar    = "HCLOUD_TOKEN"
-	hcloudEndpointENVVar = "HCLOUD_ENDPOINT"
-	hcloudNetworkENVVar  = "HCLOUD_NETWORK"
-	hcloudDebugENVVar    = "HCLOUD_DEBUG"
+	hcloudTokenENVVar               = "HCLOUD_TOKEN"
+	hcloudEndpointENVVar            = "HCLOUD_ENDPOINT"
+	hcloudNetworkENVVar             = "HCLOUD_NETWORK"
+	hcloudDebugENVVar               = "HCLOUD_DEBUG"
+	hcloudServerLabelSelectorENVVar = "HCLOUD_SERVER_LABEL_SELECTOR"
+	hcloudCCMInstanceIDENVVar       = "HCLOUD_CCM_INSTANCE_ID"
+	hcloudCCMInstanceIDQParamName   = "hccmInstanceID"
 	// Disable the "master/server is attached to the network" check against the metadata service.
 	hcloudNetworkDisableAttachedCheckENVVar  = "HCLOUD_NETWORK_DISABLE_ATTACHED_CHECK"
 	hcloudNetworkRoutesEnabledENVVar         = "HCLOUD_NETWORK_ROUTES_ENABLED"
@@ -79,6 +82,14 @@ func newCloud(config io.Reader) (cloudprovider.Interface, error) {
 	nodeName := os.Getenv(nodeNameENVVar)
 	if nodeName == "" {
 		return nil, fmt.Errorf("environment variable %q is required", nodeNameENVVar)
+	}
+
+	_, ccmIIDExists := os.LookupEnv(hcloudCCMInstanceIDENVVar)
+	_, labelSelectorExists := os.LookupEnv(hcloudServerLabelSelectorENVVar)
+	if ccmIIDExists && !labelSelectorExists ||
+		!ccmIIDExists && labelSelectorExists {
+		return nil, fmt.Errorf("environment variables %q and %q should "+
+			"either be both set, or both unset", hcloudCCMInstanceIDENVVar, hcloudServerLabelSelectorENVVar)
 	}
 
 	opts := []hcloud.ClientOption{

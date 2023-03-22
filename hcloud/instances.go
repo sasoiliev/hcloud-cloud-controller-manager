@@ -19,6 +19,7 @@ package hcloud
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/hetznercloud/hcloud-cloud-controller-manager/internal/metrics"
 	"github.com/hetznercloud/hcloud-go/hcloud"
@@ -61,9 +62,35 @@ func (i *instances) lookupServer(ctx context.Context, node *v1.Node) (*hcloud.Se
 		}
 	} else {
 		var err error
-		server, _, err = i.client.Server.GetByName(ctx, node.Name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to lookup server \"%s\": %w", node.Name, err)
+		if labelSelector, exists := os.LookupEnv(hcloudServerLabelSelectorENVVar); exists {
+			servers, _, err := i.client.Server.List(
+				ctx,
+				hcloud.ServerListOpts{
+					Name:     node.Name,
+					ListOpts: hcloud.ListOpts{LabelSelector: labelSelector},
+				},
+			)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"failed to lookup server \"%s\" (label selector: \"%s\"): %w",
+					node.Name,
+					labelSelector,
+					err,
+				)
+			}
+			if len(servers) == 0 {
+				return nil, fmt.Errorf(
+					"no server found with name \"%s\" matching label selector \"%s\"",
+					node.Name,
+					labelSelector,
+				)
+			}
+			server = servers[0]
+		} else {
+			server, _, err = i.client.Server.GetByName(ctx, node.Name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to lookup server \"%s\": %w", node.Name, err)
+			}
 		}
 	}
 	return server, nil

@@ -19,6 +19,8 @@ package hcloud
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -73,6 +75,22 @@ func providerIDToServerID(providerID string) (int, error) {
 		return 0, fmt.Errorf("%s: missing serverID: %s", op, providerID)
 	}
 
+	if myHCCMInstanceID, exists := os.LookupEnv(hcloudCCMInstanceIDENVVar); exists {
+		parsedURL, err := url.Parse(idString)
+		if err != nil {
+			return 0, fmt.Errorf("%s: unable to parse \"%s\": %v", op, providerID, err)
+		}
+		if parsedHCCMInstanceID, ok := parsedURL.Query()[hcloudCCMInstanceIDQParamName]; ok {
+			if parsedHCCMInstanceID[0] != myHCCMInstanceID {
+				return 0, fmt.Errorf("%s: HCCM instance id doesn't match, skipping \"%s\"", op, providerID)
+			} else {
+				idString = parsedURL.Path
+			}
+		} else {
+			return 0, fmt.Errorf("%s: HCCM instance id not found in \"%s\", skipping", op, providerID)
+		}
+	}
+
 	id, err := strconv.Atoi(idString)
 	if err != nil {
 		return 0, fmt.Errorf("%s: invalid serverID: %s", op, providerID)
@@ -81,5 +99,14 @@ func providerIDToServerID(providerID string) (int, error) {
 }
 
 func serverIDToProviderID(serverID int) string {
-	return fmt.Sprintf("%s://%d", providerName, serverID)
+	var myHCCMInstanceID string
+	if hccmInstanceID, ok := os.LookupEnv(hcloudCCMInstanceIDENVVar); ok {
+		myHCCMInstanceID = hccmInstanceID
+	}
+
+	if len(myHCCMInstanceID) > 0 {
+		return fmt.Sprintf("%s://%d?%s=%s", providerName, serverID, hcloudCCMInstanceIDQParamName, url.QueryEscape(myHCCMInstanceID))
+	} else {
+		return fmt.Sprintf("%s://%d", providerName, serverID)
+	}
 }
